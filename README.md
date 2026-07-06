@@ -1,42 +1,104 @@
-# cm-rgb
-[![Version](https://img.shields.io/pypi/v/cm-rgb?style=for-the-badge)](https://pypi.org/project/cm-rgb/)
-[![Licence](https://img.shields.io/github/license/gfduszynski/cm-rgb?color=blue&style=for-the-badge)](https://github.com/gfduszynski/cm-rgb/)
-[![Downloads](https://img.shields.io/pypi/dm/cm-rgb?&style=for-the-badge)](https://github.com/gfduszynski/cm-rgb/)
-[![PayPal](https://img.shields.io/badge/PayPal-1$-1abc9c.svg?style=for-the-badge)](https://www.paypal.me/gfduszynski/1USD)
+# cm-rgb-cpp
 
+> Forked from [gfduszynski/cm-rgb](https://github.com/gfduszynski/cm-rgb) — original Python project for Linux/macOS.
+>
+> 本 Fork 的目的是将原项目移植到 **C++**，使其能在 **Windows XP** 及更高版本上以单文件零依赖的方式运行。
 
-### Control your Wraith Prism RGB on Linux, Mac OS and Windows
+Control your AMD Wraith Prism RGB on Windows XP+, Linux and macOS.
 
-![Picutre](https://github.com/gfduszynski/cm-rgb/raw/master/cm-rgb-monitor.gif)
+---
 
-**cm-rgb-monitor** _showing realtime cpu utilization._
+## Project Structure
 
+```
+cm-rgb-cpp/
+├── python/                  # Original Python code (from upstream)
+│   ├── cm_rgb/              # Python package
+│   │   ├── __init__.py
+│   │   └── ctrl.py
+│   ├── scripts/             # Python scripts
+│   │   ├── cm-rgb-cli
+│   │   ├── cm-rgb-gui
+│   │   └── cm-rgb-monitor
+│   └── setup.py
+├── cm-rgb-cpp/              # C++ port (this project)
+│   ├── CMakeLists.txt       # CMake build
+│   ├── build.bat            # Direct build script
+│   └── src/
+│       ├── main.cpp         # Entry point + CLI
+│       ├── controller.h/cpp # HID controller (Win32 API)
+│       ├── gui.h/cpp        # Win32 GUI (no dependencies)
+│       └── monitor.h/cpp    # CPU monitor (WMI + Win32)
+├── .gitignore
+├── LICENSE
+└── README.md
+```
 
-## Getting started
-### Installation & Configuration
+## Build
 
-Follow [this simple guide on our wiki.](https://github.com/gfduszynski/cm-rgb/wiki/1.-Installation-&-Configuration)
+### Requirements
 
-### Usage
+- Visual Studio C++ compiler (2008 or later)
+- Windows SDK (included with Visual Studio)
 
-Package comes with two scripts ``cm-rgb-cli`` and ``cm-rgb-monitor``.  
+### Build with build.bat
 
-``cm-rgb-cli`` allows for fine grained control of each individual zone including [turning off the LED's](https://github.com/gfduszynski/cm-rgb/wiki/2.-CLI-usage#3-turning-all-zones-off) completely.
+```cmd
+cd cm-rgb-cpp
+build              # Release build
+build debug        # Debug build
+build clean        # Clean artifacts
+```
 
-Check out the [examples in our wiki](https://github.com/gfduszynski/cm-rgb/wiki/2.-CLI-usage).
+### Build with CMake
 
+```cmd
+cd cm-rgb-cpp
+cmake -B build
+cmake --build build
+```
 
-![Picture](https://github.com/gfduszynski/cm-rgb/raw/master/gui-ss.png)
-``cm-rgb-gui`` GUI interface that serves the purpose of simplifying the usage of [cm-rgb-cli] (thanks to [groovykiwi](https://github.com/groovykiwi))
+## Usage
 
-``cm-rgb-monitor`` allows for displaying cpu utilization with ring LED's, along with temperature (thanks to [mpsdskd](https://github.com/mpsdskd)).
+### CLI
 
-Combining the cli + monitor can create neat transition from powering your system right to booting your OS.
+```
+cm-rgb-cpp set logo --color=#00FFFF --mode=static --brightness=3
+cm-rgb-cpp set fan  --color=#FF0000 --mode=breathe --brightness=3 --speed=3
+cm-rgb-cpp set ring --color=#00FF00 --mode=swirl  --brightness=3 --speed=3
+cm-rgb-cpp set save
+cm-rgb-cpp restore
+cm-rgb-cpp version
+```
 
-Check out the [examples in our wiki](https://github.com/gfduszynski/cm-rgb/wiki/3.-Monitor-usage).
+### GUI
 
-## Licence
+```
+cm-rgb-cpp gui
+```
 
-**MIT** 
+### Monitor
 
-See LICENCE file for details
+```
+cm-rgb-cpp monitor [--show-temp] [--show-cpu-frequency]
+```
+
+## Features
+
+- **CLI** — Full control of all LED zones (logo, fan, ring)
+- **GUI** — Native Win32 window with tabbed interface and color picker
+- **Monitor** — Real-time CPU utilization display on ring LEDs, temperature on fan LED, frequency on logo LED
+- **Zero dependencies** — Single `.exe` file, no runtime required
+- **Windows XP+** — Compatible with Windows XP and all later versions
+
+## Upstream
+
+The original Python project by [gfduszynski](https://github.com/gfduszynski/cm-rgb) supports Linux and macOS.
+
+```bash
+pip install cm-rgb
+```
+
+## License
+
+MIT

@@ -3,9 +3,6 @@
 from cm_rgb.ctrl import LedChannel, LedMode, CMRGBController
 import click
 
-
-import click
-
 @click.group(chain=True)
 @click.pass_context
 def setup_group(ctx):

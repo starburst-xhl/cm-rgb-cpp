@@ -1,0 +1,259 @@
+#!/usr/bin/env python3
+
+import os
+import gi
+gi.require_version("Gtk", "3.0")
+from gi.repository import Gtk
+
+
+class myWindow(Gtk.Window):
+    def __init__(self):
+        Gtk.Window.__init__(self, title="CM RGB")
+        self.set_border_width(10)
+
+        # Grid
+        grid = Gtk.Grid()
+        grid.set_row_spacing(20)
+        self.add(grid)
+
+        # Stack
+        component = Gtk.Stack()
+        component.set_transition_type(Gtk.StackTransitionType.SLIDE_LEFT_RIGHT)
+        component.set_transition_duration(500)
+
+        # ----- Logo -----
+        self._build_logo_tab(component)
+
+        # ----- Fan -----
+        self._build_fan_tab(component)
+
+        # ----- Ring -----
+        self._build_ring_tab(component)
+
+        # StackSwitcher
+        stack_switcher = Gtk.StackSwitcher()
+        stack_switcher.set_stack(component)
+        grid.attach(stack_switcher, 0, 0, 1, 1)
+        grid.attach(component, 0, 1, 1, 1)
+
+        # Buttons
+        btn_apply = Gtk.Button(label="Apply")
+        btn_apply.connect("clicked", self._on_apply)
+        grid.attach(btn_apply, 0, 3, 1, 1)
+
+        btn_disable = Gtk.Button(label="Disable all RGB")
+        btn_disable.connect("clicked", self._on_disable)
+        grid.attach(btn_disable, 0, 2, 1, 1)
+
+    # ------------------------------------------------------------------
+    # Helper: build a mode + speed section for one zone
+    # ------------------------------------------------------------------
+    def _build_zone_speed(self, grid, row, prefix):
+        """Create speed label+spinbutton, store as self._<prefix>_slabel/_speed,
+        start hidden, return the mode combo so caller can connect signals."""
+        slabel = Gtk.Label(label="Speed: ")
+        grid.attach(slabel, 0, row, 1, 1)
+
+        speed_value = Gtk.Adjustment(0, 0, 5, 1, 1, 0)
+        speed = Gtk.SpinButton()
+        speed.set_adjustment(speed_value)
+        grid.attach(speed, 1, row, 1, 1)
+
+        setattr(self, "_%s_slabel" % prefix, slabel)
+        setattr(self, "_%s_speed" % prefix, speed)
+
+        slabel.hide()
+        speed.hide()
+
+    def _on_mode_changed(self, combo, prefix):
+        """Show/hide speed controls based on mode selection."""
+        slabel = getattr(self, "_%s_slabel" % prefix)
+        speed = getattr(self, "_%s_speed" % prefix)
+        if combo.get_active() == 1:  # Breathing
+            slabel.show()
+            speed.show()
+        else:
+            slabel.hide()
+            speed.hide()
+
+    # ------------------------------------------------------------------
+    # Logo tab
+    # ------------------------------------------------------------------
+    def _build_logo_tab(self, component):
+        grid = Gtk.Grid()
+        grid.set_row_spacing(20)
+        grid.set_column_spacing(20)
+        component.add_titled(grid, "logo_grid", "Logo")
+
+        # Mode
+        grid.attach(Gtk.Label(label="Mode: "), 0, 0, 1, 1)
+        modes = Gtk.ListStore(str)
+        modes.append(["Static"])
+        modes.append(["Breathing"])
+        self.logo_mode = Gtk.ComboBox.new_with_model(modes)
+        self.logo_mode.set_active(0)
+        renderer_text = Gtk.CellRendererText()
+        self.logo_mode.pack_start(renderer_text, True)
+        self.logo_mode.add_attribute(renderer_text, "text", 0)
+        grid.attach(self.logo_mode, 1, 0, 1, 1)
+
+        # Color
+        grid.attach(Gtk.Label(label="Color: "), 0, 1, 1, 1)
+        self.logo_color = Gtk.ColorButton()
+        grid.attach(self.logo_color, 1, 1, 1, 1)
+
+        # Brightness
+        grid.attach(Gtk.Label(label="Brightness: "), 0, 2, 1, 1)
+        bright_value = Gtk.Adjustment(0, 0, 5, 1, 1, 0)
+        self.logo_bright = Gtk.SpinButton()
+        self.logo_bright.set_adjustment(bright_value)
+        grid.attach(self.logo_bright, 1, 2, 1, 1)
+
+        # Speed (pre-created, starts hidden)
+        self._build_zone_speed(grid, 3, "logo")
+        self.logo_mode.connect("changed", self._on_mode_changed, "logo")
+
+    # ------------------------------------------------------------------
+    # Fan tab
+    # ------------------------------------------------------------------
+    def _build_fan_tab(self, component):
+        grid = Gtk.Grid()
+        grid.set_row_spacing(20)
+        grid.set_column_spacing(20)
+        component.add_titled(grid, "fan_grid", "Fan")
+
+        # Mode
+        grid.attach(Gtk.Label(label="Mode: "), 0, 0, 1, 1)
+        modes = Gtk.ListStore(str)
+        modes.append(["Static"])
+        modes.append(["Breathing"])
+        self.fan_mode = Gtk.ComboBox.new_with_model(modes)
+        self.fan_mode.set_active(0)
+        renderer_text = Gtk.CellRendererText()
+        self.fan_mode.pack_start(renderer_text, True)
+        self.fan_mode.add_attribute(renderer_text, "text", 0)
+        grid.attach(self.fan_mode, 1, 0, 1, 1)
+
+        # Color
+        grid.attach(Gtk.Label(label="Color: "), 0, 1, 1, 1)
+        self.fan_color = Gtk.ColorButton()
+        grid.attach(self.fan_color, 1, 1, 1, 1)
+
+        # Brightness
+        grid.attach(Gtk.Label(label="Brightness: "), 0, 2, 1, 1)
+        bright_value = Gtk.Adjustment(0, 0, 5, 1, 1, 0)
+        self.fan_bright = Gtk.SpinButton()
+        self.fan_bright.set_adjustment(bright_value)
+        grid.attach(self.fan_bright, 1, 2, 1, 1)
+
+        # Speed (pre-created, starts hidden)
+        self._build_zone_speed(grid, 3, "fan")
+        self.fan_mode.connect("changed", self._on_mode_changed, "fan")
+
+    # ------------------------------------------------------------------
+    # Ring tab
+    # ------------------------------------------------------------------
+    def _build_ring_tab(self, component):
+        grid = Gtk.Grid()
+        grid.set_row_spacing(20)
+        grid.set_column_spacing(20)
+        component.add_titled(grid, "ring_grid", "Ring")
+
+        # Mode
+        grid.attach(Gtk.Label(label="Mode: "), 0, 0, 1, 1)
+        modes = Gtk.ListStore(str)
+        modes.append(["Static"])
+        modes.append(["Breathing"])
+        self.ring_mode = Gtk.ComboBox.new_with_model(modes)
+        self.ring_mode.set_active(0)
+        renderer_text = Gtk.CellRendererText()
+        self.ring_mode.pack_start(renderer_text, True)
+        self.ring_mode.add_attribute(renderer_text, "text", 0)
+        grid.attach(self.ring_mode, 1, 0, 1, 1)
+
+        # Color
+        grid.attach(Gtk.Label(label="Color: "), 0, 1, 1, 1)
+        self.ring_color = Gtk.ColorButton()
+        grid.attach(self.ring_color, 1, 1, 1, 1)
+
+        # Brightness
+        grid.attach(Gtk.Label(label="Brightness: "), 0, 2, 1, 1)
+        bright_value = Gtk.Adjustment(0, 0, 5, 1, 1, 0)
+        self.ring_bright = Gtk.SpinButton()
+        self.ring_bright.set_adjustment(bright_value)
+        grid.attach(self.ring_bright, 1, 2, 1, 1)
+
+        # Speed (pre-created, starts hidden)
+        self._build_zone_speed(grid, 3, "ring")
+        self.ring_mode.connect("changed", self._on_mode_changed, "ring")
+
+    # ------------------------------------------------------------------
+    # Button handlers
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _rgb_to_hex(rgb):
+        red = int(rgb.red * 255)
+        green = int(rgb.green * 255)
+        blue = int(rgb.blue * 255)
+        return '#%02x%02x%02x' % (red, green, blue)
+
+    def _on_apply(self, button):
+        # Logo
+        if self.logo_mode.get_active() == 0:
+            final_logo_mode = "static"
+        else:
+            final_logo_mode = "breathe"
+
+        final_logo_brightness = str(self.logo_bright.get_value_as_int())
+        final_logo_speed = str(self._logo_speed.get_value_as_int())
+        final_logo_color = self._rgb_to_hex(self.logo_color.get_rgba())
+
+        # Fan
+        if self.fan_mode.get_active() == 0:
+            final_fan_mode = "static"
+        else:
+            final_fan_mode = "breathe"
+
+        final_fan_brightness = str(self.fan_bright.get_value_as_int())
+        final_fan_speed = str(self._fan_speed.get_value_as_int())
+        final_fan_color = self._rgb_to_hex(self.fan_color.get_rgba())
+
+        # Ring
+        if self.ring_mode.get_active() == 0:
+            final_ring_mode = "static"
+        else:
+            final_ring_mode = "breathe"
+
+        final_ring_brightness = str(self.ring_bright.get_value_as_int())
+        final_ring_speed = str(self._ring_speed.get_value_as_int())
+        final_ring_color = self._rgb_to_hex(self.ring_color.get_rgba())
+
+        # Build and run command
+        final_command = (
+            "cm-rgb-cli set logo --mode=" + final_logo_mode +
+            " --color=" + final_logo_color +
+            " --brightness=" + final_logo_brightness +
+            " --speed=" + final_logo_speed +
+            " fan --mode=" + final_fan_mode +
+            " --color=" + final_fan_color +
+            " --brightness=" + final_fan_brightness +
+            " --speed=" + final_fan_speed +
+            " ring --mode=" + final_ring_mode +
+            " --color=" + final_ring_color +
+            " --brightness=" + final_ring_brightness +
+            " --speed=" + final_ring_speed +
+            " save"
+        )
+        os.system(final_command)
+        print("\nCommand ran: " + final_command)
+
+    def _on_disable(self, button):
+        print("\nDisabling all RGB")
+        os.system("cm-rgb-cli set logo --mode=off save")
+
+
+if __name__ == "__main__":
+    win = myWindow()
+    win.connect("destroy", Gtk.main_quit)
+    win.show_all()
+    Gtk.main()
