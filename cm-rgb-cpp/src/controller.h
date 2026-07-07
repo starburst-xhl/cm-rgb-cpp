@@ -1,4 +1,7 @@
 #pragma once
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <string>
 #include <vector>
@@ -54,27 +57,25 @@ public:
     void DisableMirage();
     std::string GetVersion();
 
+    // Conversion helpers (public - used by CLI, GUI, and Monitor)
+    static BYTE BrightnessToByte(const char* mode, int brightness);
+    static BYTE SpeedToByte(const char* mode, int speed);
+
+    // Packet structure for HID communication
+    struct Packet {
+        BYTE data[65];
+        Packet(BYTE fill = 0);
+        void SetArgs(const std::vector<BYTE>& args);
+    };
+
 private:
     HANDLE m_hDevice;
 
     static const int PACKET_SIZE = 65;
     static const int READ_SIZE   = 64;
 
-    struct Packet {
-        BYTE data[PACKET_SIZE];
-        Packet(BYTE fill = 0);
-        void SetArgs(const std::vector<BYTE>& args);
-    };
-
     std::vector<BYTE> SendPacket(const Packet& pkt);
     bool FindDevice();
 
     static void HzToBytes(int hz, BYTE out[3]);
-
-    // Convert 1-5 brightness to hardware byte value
-    // mode is used for ring-specific tables ("cycle", "rainbow", etc.)
-    static BYTE BrightnessToByte(const char* mode, int brightness);
-
-    // Convert 1-5 speed to hardware byte value
-    static BYTE SpeedToByte(const char* mode, int speed);
 };

@@ -69,6 +69,26 @@ struct GUIState {
 static GUIState g_state;
 
 // ---------------------------------------------------------------------------
+// Global font for all controls (Tahoma 8pt, cleaner than default MS Sans Serif)
+// ---------------------------------------------------------------------------
+static HFONT g_hFont = NULL;
+
+static HFONT CreateAppFont() {
+    HDC hdc = GetDC(NULL);
+    int nHeight = -MulDiv(8, GetDeviceCaps(hdc, LOGPIXELSY), 72);
+    ReleaseDC(NULL, hdc);
+    return CreateFont(nHeight, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+                      DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+                      DEFAULT_QUALITY, DEFAULT_PITCH | FF_DONTCARE, "Tahoma");
+}
+
+static void SetAppFont(HWND hWnd) {
+    if (!g_hFont)
+        g_hFont = CreateAppFont();
+    SendMessage(hWnd, WM_SETFONT, (WPARAM)g_hFont, TRUE);
+}
+
+// ---------------------------------------------------------------------------
 // Color picker state (per instance)
 // ---------------------------------------------------------------------------
 struct ColorPickerData {
@@ -88,31 +108,102 @@ static LRESULT CALLBACK ColorPickerWndProc(HWND hWnd, UINT msg, WPARAM wParam, L
 static void ShowColorPicker(HWND hParent, int& r, int& g, int& b);
 
 // ---------------------------------------------------------------------------
+// Page container window class
+// Custom window that acts as a transparent container for tab pages.
+// Handles WM_DRAWITEM for owner-drawn color buttons inside it,
+// and suppresses background painting to avoid visual artifacts.
+// ---------------------------------------------------------------------------
+static const char PAGE_CLASS_NAME[] = "CMRGB_PageContainer";
+
+static LRESULT CALLBACK PageContainerProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    switch (msg) {
+    case WM_ERASEBKGND:
+        return 1; // Suppress background erase (prevents black dots)
+
+    case WM_CTLCOLORSTATIC:
+        return (LRESULT)GetStockObject(NULL_BRUSH); // Transparent static controls
+
+    case WM_DRAWITEM: {
+        LPDRAWITEMSTRUCT dis = (LPDRAWITEMSTRUCT)lParam;
+        if (dis->CtlType == ODT_BUTTON) {
+            int r = 0, g = 0, b = 0;
+            if (dis->CtlID == ID_LOGO_COLOR) {
+                r = g_state.logoR; g = g_state.logoG; b = g_state.logoB;
+            } else if (dis->CtlID == ID_FAN_COLOR) {
+                r = g_state.fanR; g = g_state.fanG; b = g_state.fanB;
+            } else if (dis->CtlID == ID_RING_COLOR) {
+                r = g_state.ringR; g = g_state.ringG; b = g_state.ringB;
+            }
+            HBRUSH br = CreateSolidBrush(RGB(r, g, b));
+            FillRect(dis->hDC, &dis->rcItem, br);
+            DeleteObject(br);
+            FrameRect(dis->hDC, &dis->rcItem, (HBRUSH)GetStockObject(BLACK_BRUSH));
+            return TRUE;
+        }
+        return 0;
+    }
+
+    case WM_COMMAND:
+        // Forward color button clicks to the main window
+        if (HIWORD(wParam) == BN_CLICKED) {
+            if (LOWORD(wParam) == ID_LOGO_COLOR)
+                ShowColorPicker(GetAncestor(hWnd, GA_ROOT), g_state.logoR, g_state.logoG, g_state.logoB);
+            else if (LOWORD(wParam) == ID_FAN_COLOR)
+                ShowColorPicker(GetAncestor(hWnd, GA_ROOT), g_state.fanR, g_state.fanG, g_state.fanB);
+            else if (LOWORD(wParam) == ID_RING_COLOR)
+                ShowColorPicker(GetAncestor(hWnd, GA_ROOT), g_state.ringR, g_state.ringG, g_state.ringB);
+        }
+        return 0;
+    }
+    return DefWindowProc(hWnd, msg, wParam, lParam);
+}
+
+static void RegisterPageContainerClass(HINSTANCE hInstance) {
+    WNDCLASS wc = {0};
+    wc.lpfnWndProc   = PageContainerProc;
+    wc.hInstance     = hInstance;
+    wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
+    wc.hbrBackground = NULL; // No background brush
+    wc.lpszClassName = PAGE_CLASS_NAME;
+    RegisterClass(&wc);
+}
+
+// ---------------------------------------------------------------------------
 // Create a labeled control on a parent
 // ---------------------------------------------------------------------------
 static HWND CreateLabel(HWND hParent, const char* text, int x, int y, int w, int h) {
-    return CreateWindow("STATIC", text, WS_VISIBLE | WS_CHILD,
-                        x, y, w, h, hParent, NULL, GetModuleHandle(NULL), NULL);
+    HWND hwnd = CreateWindow("STATIC", text, WS_VISIBLE | WS_CHILD,
+                              x, y, w, h, hParent, NULL, GetModuleHandle(NULL), NULL);
+    SetAppFont(hwnd);
+    return hwnd;
 }
 
 static HWND CreateCombo(HWND hParent, int id, int x, int y, int w, int h) {
-    return CreateWindow("COMBOBOX", "", WS_VISIBLE | WS_CHILD | CBS_DROPDOWNLIST | WS_VSCROLL,
-                        x, y, w, h, hParent, (HMENU)id, GetModuleHandle(NULL), NULL);
+    HWND hwnd = CreateWindow("COMBOBOX", "", WS_VISIBLE | WS_CHILD | CBS_DROPDOWNLIST | WS_VSCROLL,
+                              x, y, w, h, hParent, (HMENU)id, GetModuleHandle(NULL), NULL);
+    SetAppFont(hwnd);
+    return hwnd;
 }
 
 static HWND CreateEdit(HWND hParent, int id, int x, int y, int w, int h) {
-    return CreateWindow("EDIT", "3", WS_VISIBLE | WS_CHILD | WS_BORDER | ES_NUMBER,
-                        x, y, w, h, hParent, (HMENU)id, GetModuleHandle(NULL), NULL);
+    HWND hwnd = CreateWindow("EDIT", "3", WS_VISIBLE | WS_CHILD | WS_BORDER | ES_NUMBER,
+                              x, y, w, h, hParent, (HMENU)id, GetModuleHandle(NULL), NULL);
+    SetAppFont(hwnd);
+    return hwnd;
 }
 
 static HWND CreateButton(HWND hParent, const char* text, int id, int x, int y, int w, int h) {
-    return CreateWindow("BUTTON", text, WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
-                        x, y, w, h, hParent, (HMENU)id, GetModuleHandle(NULL), NULL);
+    HWND hwnd = CreateWindow("BUTTON", text, WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
+                              x, y, w, h, hParent, (HMENU)id, GetModuleHandle(NULL), NULL);
+    SetAppFont(hwnd);
+    return hwnd;
 }
 
 static HWND CreateColorBtn(HWND hParent, int id, int x, int y, int w, int h) {
-    return CreateWindow("BUTTON", "", WS_VISIBLE | WS_CHILD | BS_OWNERDRAW,
-                        x, y, w, h, hParent, (HMENU)id, GetModuleHandle(NULL), NULL);
+    HWND hwnd = CreateWindow("BUTTON", "", WS_VISIBLE | WS_CHILD | BS_OWNERDRAW,
+                              x, y, w, h, hParent, (HMENU)id, GetModuleHandle(NULL), NULL);
+    SetAppFont(hwnd);
+    return hwnd;
 }
 
 // ---------------------------------------------------------------------------
@@ -123,7 +214,7 @@ static void CreateLogoPage(HWND hTab) {
     GetClientRect(hTab, &rc);
     TabCtrl_AdjustRect(hTab, FALSE, &rc);
 
-    g_state.hLogoPage = CreateWindow("STATIC", "", WS_VISIBLE | WS_CHILD,
+    g_state.hLogoPage = CreateWindow(PAGE_CLASS_NAME, "", WS_VISIBLE | WS_CHILD,
                                       rc.left, rc.top,
                                       rc.right - rc.left, rc.bottom - rc.top,
                                       hTab, NULL, GetModuleHandle(NULL), NULL);
@@ -142,12 +233,12 @@ static void CreateLogoPage(HWND hTab) {
     g_state.logoR = 0; g_state.logoG = 255; g_state.logoB = 255;
 
     y += 30;
-    CreateLabel(g_state.hLogoPage, "Brightness (1-5):", 10, y, 100, 20);
-    g_state.hLogoBright = CreateEdit(g_state.hLogoPage, ID_LOGO_BRIGHTNESS, 120, y, 40, 20);
+    CreateLabel(g_state.hLogoPage, "Brightness (1-5):", 10, y, 130, 20);
+    g_state.hLogoBright = CreateEdit(g_state.hLogoPage, ID_LOGO_BRIGHTNESS, 150, y, 40, 20);
 
     y += 30;
-    CreateLabel(g_state.hLogoPage, "Speed (1-5):", 10, y, 100, 20);
-    g_state.hLogoSpeed = CreateEdit(g_state.hLogoPage, ID_LOGO_SPEED, 120, y, 40, 20);
+    CreateLabel(g_state.hLogoPage, "Speed (1-5):", 10, y, 130, 20);
+    g_state.hLogoSpeed = CreateEdit(g_state.hLogoPage, ID_LOGO_SPEED, 150, y, 40, 20);
 }
 
 static void CreateFanPage(HWND hTab) {
@@ -155,7 +246,7 @@ static void CreateFanPage(HWND hTab) {
     GetClientRect(hTab, &rc);
     TabCtrl_AdjustRect(hTab, FALSE, &rc);
 
-    g_state.hFanPage = CreateWindow("STATIC", "", WS_VISIBLE | WS_CHILD,
+    g_state.hFanPage = CreateWindow(PAGE_CLASS_NAME, "", WS_VISIBLE | WS_CHILD,
                                      rc.left, rc.top,
                                      rc.right - rc.left, rc.bottom - rc.top,
                                      hTab, NULL, GetModuleHandle(NULL), NULL);
@@ -174,12 +265,12 @@ static void CreateFanPage(HWND hTab) {
     g_state.fanR = 255; g_state.fanG = 165; g_state.fanB = 0;
 
     y += 30;
-    CreateLabel(g_state.hFanPage, "Brightness (1-5):", 10, y, 100, 20);
-    g_state.hFanBright = CreateEdit(g_state.hFanPage, ID_FAN_BRIGHTNESS, 120, y, 40, 20);
+    CreateLabel(g_state.hFanPage, "Brightness (1-5):", 10, y, 130, 20);
+    g_state.hFanBright = CreateEdit(g_state.hFanPage, ID_FAN_BRIGHTNESS, 150, y, 40, 20);
 
     y += 30;
-    CreateLabel(g_state.hFanPage, "Speed (1-5):", 10, y, 100, 20);
-    g_state.hFanSpeed = CreateEdit(g_state.hFanPage, ID_FAN_SPEED, 120, y, 40, 20);
+    CreateLabel(g_state.hFanPage, "Speed (1-5):", 10, y, 130, 20);
+    g_state.hFanSpeed = CreateEdit(g_state.hFanPage, ID_FAN_SPEED, 150, y, 40, 20);
 
     y += 30;
     CreateLabel(g_state.hFanPage, "Mirage R freq:", 10, y, 100, 20);
@@ -199,7 +290,7 @@ static void CreateRingPage(HWND hTab) {
     GetClientRect(hTab, &rc);
     TabCtrl_AdjustRect(hTab, FALSE, &rc);
 
-    g_state.hRingPage = CreateWindow("STATIC", "", WS_VISIBLE | WS_CHILD,
+    g_state.hRingPage = CreateWindow(PAGE_CLASS_NAME, "", WS_VISIBLE | WS_CHILD,
                                       rc.left, rc.top,
                                       rc.right - rc.left, rc.bottom - rc.top,
                                       hTab, NULL, GetModuleHandle(NULL), NULL);
@@ -221,12 +312,12 @@ static void CreateRingPage(HWND hTab) {
     g_state.ringR = 0; g_state.ringG = 255; g_state.ringB = 0;
 
     y += 30;
-    CreateLabel(g_state.hRingPage, "Brightness (1-5):", 10, y, 100, 20);
-    g_state.hRingBright = CreateEdit(g_state.hRingPage, ID_RING_BRIGHTNESS, 120, y, 40, 20);
+    CreateLabel(g_state.hRingPage, "Brightness (1-5):", 10, y, 130, 20);
+    g_state.hRingBright = CreateEdit(g_state.hRingPage, ID_RING_BRIGHTNESS, 150, y, 40, 20);
 
     y += 30;
-    CreateLabel(g_state.hRingPage, "Speed (1-5):", 10, y, 100, 20);
-    g_state.hRingSpeed = CreateEdit(g_state.hRingPage, ID_RING_SPEED, 120, y, 40, 20);
+    CreateLabel(g_state.hRingPage, "Speed (1-5):", 10, y, 130, 20);
+    g_state.hRingSpeed = CreateEdit(g_state.hRingPage, ID_RING_SPEED, 150, y, 40, 20);
 }
 
 // ---------------------------------------------------------------------------
@@ -347,9 +438,15 @@ static void ShowColorPicker(HWND hParent, int& r, int& g, int& b) {
     data.r = r; data.g = g; data.b = b;
     data.outR = &r; data.outG = &g; data.outB = &b;
 
+    int screenW = GetSystemMetrics(SM_CXSCREEN);
+    int screenH = GetSystemMetrics(SM_CYSCREEN);
+    int winW = 290, winH = 210;
+    int x = (screenW - winW) / 2;
+    int y = (screenH - winH) / 2;
+
     HWND hWnd = CreateWindowEx(0, CLASS_NAME, "Pick Color",
                                 WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
-                                CW_USEDEFAULT, CW_USEDEFAULT, 290, 210,
+                                x, y, winW, winH,
                                 hParent, NULL, GetModuleHandle(NULL), &data);
 
     if (hWnd) {
@@ -363,6 +460,11 @@ static void ShowColorPicker(HWND hParent, int& r, int& g, int& b) {
             DispatchMessage(&msg);
         }
     }
+
+    // Refresh color buttons after picker closes
+    InvalidateRect(g_state.hLogoColor, NULL, TRUE);
+    InvalidateRect(g_state.hFanColor, NULL, TRUE);
+    InvalidateRect(g_state.hRingColor, NULL, TRUE);
 }
 
 // ---------------------------------------------------------------------------
@@ -494,13 +596,20 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
     switch (msg) {
     case WM_CREATE: {
         // Init common controls
-        INITCOMMONCONTROLSEX icex = {sizeof(INITCOMMONCONTROLSEX), ICC_TAB_CLASSES};
+        INITCOMMONCONTROLSEX icex = {sizeof(INITCOMMONCONTROLSEX), ICC_TAB_CLASSES | ICC_BAR_CLASSES | ICC_STANDARD_CLASSES};
         InitCommonControlsEx(&icex);
+
+        // Register page container class
+        RegisterPageContainerClass(((CREATESTRUCT*)lParam)->hInstance);
+
+        // Create global font
+        g_hFont = CreateAppFont();
 
         // Tab control
         g_state.hTab = CreateWindow(WC_TABCONTROL, "", WS_VISIBLE | WS_CHILD | TCS_FIXEDWIDTH,
                                     10, 10, 360, 240, hWnd, (HMENU)ID_TAB,
                                     GetModuleHandle(NULL), NULL);
+        SetAppFont(g_state.hTab);
 
         TCITEM tie = {0};
         tie.mask = TCIF_TEXT;
@@ -546,26 +655,6 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
         return 0;
     }
 
-    case WM_DRAWITEM: {
-        LPDRAWITEMSTRUCT dis = (LPDRAWITEMSTRUCT)lParam;
-        if (dis->CtlType == ODT_BUTTON) {
-            int r = 0, g = 0, b = 0;
-            if (dis->CtlID == ID_LOGO_COLOR) {
-                r = g_state.logoR; g = g_state.logoG; b = g_state.logoB;
-            } else if (dis->CtlID == ID_FAN_COLOR) {
-                r = g_state.fanR; g = g_state.fanG; b = g_state.fanB;
-            } else if (dis->CtlID == ID_RING_COLOR) {
-                r = g_state.ringR; g = g_state.ringG; b = g_state.ringB;
-            }
-            HBRUSH br = CreateSolidBrush(RGB(r, g, b));
-            FillRect(dis->hDC, &dis->rcItem, br);
-            DeleteObject(br);
-            FrameRect(dis->hDC, &dis->rcItem, (HBRUSH)GetStockObject(BLACK_BRUSH));
-            return TRUE;
-        }
-        return 0;
-    }
-
     case WM_COMMAND: {
         switch (LOWORD(wParam)) {
         case ID_LOGO_COLOR:
@@ -594,6 +683,10 @@ static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lPara
     }
 
     case WM_DESTROY:
+        if (g_hFont) {
+            DeleteObject(g_hFont);
+            g_hFont = NULL;
+        }
         PostQuitMessage(0);
         return 0;
     }
@@ -619,10 +712,16 @@ int RunGUI(HINSTANCE hInstance) {
         return 1;
     }
 
+    int screenW = GetSystemMetrics(SM_CXSCREEN);
+    int screenH = GetSystemMetrics(SM_CYSCREEN);
+    int winW = 400, winH = 340;
+    int x = (screenW - winW) / 2;
+    int y = (screenH - winH) / 2;
+
     HWND hWnd = CreateWindowEx(
         0, CLASS_NAME, "CM RGB Controller",
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
-        CW_USEDEFAULT, CW_USEDEFAULT, 400, 340,
+        x, y, winW, winH,
         NULL, NULL, hInstance, NULL);
 
     if (!hWnd) {

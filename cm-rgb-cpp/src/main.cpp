@@ -21,6 +21,11 @@
 #include <vector>
 #include <sstream>
 
+// Enable Windows XP visual styles (Luna theme)
+#pragma comment(linker,"\"/manifestdependency:type='win32' \
+name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
+processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+
 #include "controller.h"
 #include "gui.h"
 #include "monitor.h"
@@ -200,21 +205,56 @@ static int CmdSet(CMRGBController& ctrl, const Args& args) {
 }
 
 // ---------------------------------------------------------------------------
+// Console management for Windows subsystem
+// When compiled as /SUBSYSTEM:WINDOWS, no console is created by default.
+// We attach to the parent console only when running CLI commands.
+// ---------------------------------------------------------------------------
+static void EnsureConsole() {
+    if (!AttachConsole(ATTACH_PARENT_PROCESS)) {
+        // No parent console (e.g. launched from Explorer), allocate one
+        AllocConsole();
+        FILE* fp;
+        freopen_s(&fp, "CONOUT$", "w", stdout);
+        freopen_s(&fp, "CONOUT$", "w", stderr);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
-int main(int argc, char* argv[]) {
-    Args args = ParseArgs(argc, argv);
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int) {
+    // Re-parse command line
+    int argc;
+    LPWSTR* argv_w = CommandLineToArgvW(GetCommandLineW(), &argc);
+
+    // Convert wchar_t* args to char* args
+    std::vector<std::string> args_str(argc);
+    std::vector<char*> args_ptrs(argc);
+    for (int i = 0; i < argc; ++i) {
+        int len = WideCharToMultiByte(CP_UTF8, 0, argv_w[i], -1, NULL, 0, NULL, NULL);
+        args_str[i].resize(len);
+        WideCharToMultiByte(CP_UTF8, 0, argv_w[i], -1, &args_str[i][0], len, NULL, NULL);
+        args_ptrs[i] = &args_str[i][0];
+    }
+    LocalFree(argv_w);
+
+    Args args = ParseArgs(argc, args_ptrs.data());
 
     if (args.positional.empty()) {
-        // No arguments: launch GUI
-        return RunGUI();
+        // No arguments: launch GUI (no console needed)
+        return RunGUI(hInstance);
     }
 
     const std::string& cmd = args.positional[0];
 
     if (cmd == "gui") {
-        return RunGUI();
-    } else if (cmd == "monitor") {
+        return RunGUI(hInstance);
+    }
+
+    // CLI commands need a console
+    EnsureConsole();
+
+    if (cmd == "monitor") {
         return RunMonitor(args);
     } else if (cmd == "restore") {
         CMRGBController ctrl;

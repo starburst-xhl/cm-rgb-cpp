@@ -4,7 +4,7 @@
 >
 > 本 Fork 的目的是将原项目移植到 **C++**，使其能在 **Windows XP** 及更高版本上以单文件零依赖的方式运行。
 
-Control your AMD Wraith Prism RGB on Windows XP+, Linux and macOS.
+Control your AMD Wraith Prism RGB on Windows XP+.
 
 ---
 
@@ -41,11 +41,18 @@ cm-rgb-cpp/
 - Visual Studio C++ compiler (2008 or later)
 - Windows SDK (included with Visual Studio)
 
+> **VS2022 用户注意**：需要额外安装 **"C++ Windows XP Support"** 组件。
+> 打开 Visual Studio Installer → 修改 VS2022 → 单个组件 → 搜索 `v141_xp` →
+> 勾选 **"C++ Windows XP Support for VS 2017 (v141) tools [Deprecated]"** 安装即可。
+>
+> **建议编译 32 位 (x86) 版本**，因为 64 位 Windows XP 比较少见。
+> 在 "Developer Command Prompt for VS 2022" 中默认就是 x86 编译。
+
 ### Build with build.bat
 
 ```cmd
 cd cm-rgb-cpp
-build              # Release build
+build              # Release build (XP compatible)
 build debug        # Debug build
 build clean        # Clean artifacts
 ```
@@ -90,14 +97,6 @@ cm-rgb-cpp monitor [--show-temp] [--show-cpu-frequency]
 - **Monitor** — Real-time CPU utilization display on ring LEDs, temperature on fan LED, frequency on logo LED
 - **Zero dependencies** — Single `.exe` file, no runtime required
 - **Windows XP+** — Compatible with Windows XP and all later versions
-
-## Upstream
-
-The original Python project by [gfduszynski](https://github.com/gfduszynski/cm-rgb) supports Linux and macOS.
-
-```bash
-pip install cm-rgb
-```
 
 ## License
 

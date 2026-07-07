@@ -3,9 +3,14 @@ REM Build script for cm-rgb (Windows XP compatible)
 REM Requires: Visual Studio C++ compiler (cl.exe)
 REM
 REM Usage:
-REM   build              - Build release
-REM   build debug        - Build debug
+REM   build              - Release build (XP compatible)
+REM   build debug        - Debug build
 REM   build clean        - Clean build artifacts
+REM
+REM NOTE for VS2022:
+REM   Install "C++ Windows XP Support" via Visual Studio Installer
+REM   (Individual components > Compilers > v141_xp toolset)
+REM   Then run from "Developer Command Prompt for VS 2022".
 
 setlocal
 
@@ -17,9 +22,12 @@ if /I "%1"=="debug" set "DEBUG=1"
 
 if not exist "%BUILD_DIR%" mkdir "%BUILD_DIR%"
 
-set "CXXFLAGS=/nologo /EHsc /W3 /D_WIN32_WINNT=0x0501 /DWINVER=0x0501"
-set "LDFLAGS=/nologo"
-set "LIBS=setupapi.lib hid.lib comctl32.lib wbemuuid.lib ole32.lib oleaut32.lib"
+REM _WIN32_WINNT=0x0501 = Windows XP
+REM _USING_V110_SDK71_  = use XP-compatible CRT from VS2022 XP support component
+REM /SUBSYSTEM:CONSOLE,5.01 = mark PE header as XP-compatible (x86)
+set "CXXFLAGS=/nologo /EHsc /W3 /DNOMINMAX /D_WIN32_WINNT=0x0501 /DWINVER=0x0501 /D_USING_V110_SDK71_"
+set "LDFLAGS=/nologo /SUBSYSTEM:WINDOWS,5.01"
+set "LIBS=setupapi.lib hid.lib comctl32.lib gdi32.lib advapi32.lib shell32.lib wbemuuid.lib ole32.lib oleaut32.lib"
 
 if defined DEBUG (
     set "CXXFLAGS=%CXXFLAGS% /Od /Zi /D_DEBUG"
